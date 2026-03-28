@@ -19,13 +19,18 @@ Adafruit_VEML7700 veml;
 GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> display(GxEPD2_154_D67(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
 const size_t WINDOW_SAMPLES = 60;
-const unsigned long SAMPLE_INTERVAL_MS = WINDOW_SAMPLES * 1000UL;
+const unsigned long MINUTE_INTERVAL_MS = 60000UL;
+const unsigned long SUBSAMPLE_INTERVAL_MS = 5000UL;
 
 float sampleBuffer[WINDOW_SAMPLES];
 size_t sampleIndex = 0;
 size_t sampleCount = 0;
 float sampleSum = 0.0f;
-unsigned long lastSample = 0;
+
+float subSampleSum = 0.0f;
+size_t subSampleCount = 0;
+unsigned long lastSubSample = 0;
+unsigned long lastMinute = 0;
 
 float luxToDaylightScore(float lux) {
     const float maxLux = 10000.0f;
@@ -98,17 +103,28 @@ void addSample(float score) {
     sampleIndex = (sampleIndex + 1) % WINDOW_SAMPLES;
 }
 
-void sampleAndDisplay() {
+void collectSubSample() {
     float lux = veml.readLux();
-    float score = luxToDaylightScore(lux);
-    addSample(score);
+    subSampleSum += lux;
+    subSampleCount++;
+    Serial.print("Sub-sample lux: ");
+    Serial.println(lux, 1);
+}
+
+void finalizeMinute() {
+    float avgLux = (subSampleCount > 0) ? (subSampleSum / (float)subSampleCount) : 0.0f;
+    float minuteScore = luxToDaylightScore(avgLux);
+    subSampleSum = 0.0f;
+    subSampleCount = 0;
+    addSample(minuteScore);
     float avg = rollingAverage();
-    Serial.print("Lux: ");
-    Serial.print(lux, 1);
-    Serial.print("  Score: ");
-    Serial.print(score, 1);
+    Serial.print("Minute avg lux: ");
+    Serial.print(avgLux, 1);
+    Serial.print("  score: ");
+    Serial.print(minuteScore, 1);
     Serial.print("  1h avg: ");
     Serial.println(avg, 1);
+    float lux = veml.readLux();
     drawScreen(lux, avg);
 }
 
@@ -122,7 +138,6 @@ void debugBuffer() {
         Serial.println(sampleBuffer[idx], 2);
     }
     Serial.print("Computed rolling average: "); Serial.println(rollingAverage(), 2);
-    Serial.println("");
 }
 
 void setup() {
@@ -139,15 +154,22 @@ void setup() {
             delay(1000);
         }
     }
-    sampleAndDisplay();
-    lastSample = millis();
+    veml.setIntegrationTime(VEML7700_IT_800MS);
+    veml.setGain(VEML7700_GAIN_1_4);
+    collectSubSample();
+    lastSubSample = millis();
+    lastMinute = millis();
 }
 
 void loop() {
-    while (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
-        lastSample += SAMPLE_INTERVAL_MS;
-        sampleAndDisplay();
+    unsigned long now = millis();
+    if (now - lastSubSample >= SUBSAMPLE_INTERVAL_MS) {
+        lastSubSample += SUBSAMPLE_INTERVAL_MS;
+        collectSubSample();
+    }
+    if (now - lastMinute >= MINUTE_INTERVAL_MS) {
+        lastMinute += MINUTE_INTERVAL_MS;
+        finalizeMinute();
         debugBuffer();
     }
 }
-
