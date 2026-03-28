@@ -18,8 +18,8 @@
 Adafruit_VEML7700 veml;
 GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> display(GxEPD2_154_D67(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
-const unsigned long SAMPLE_INTERVAL_MS = 60000UL;
 const size_t WINDOW_SAMPLES = 60;
+const unsigned long SAMPLE_INTERVAL_MS = WINDOW_SAMPLES * 1000UL;
 
 float sampleBuffer[WINDOW_SAMPLES];
 size_t sampleIndex = 0;
@@ -112,6 +112,19 @@ void sampleAndDisplay() {
     drawScreen(lux, avg);
 }
 
+void debugBuffer() {
+    Serial.print("Sample count: "); Serial.println(sampleCount);
+    Serial.print("Next write index: "); Serial.println(sampleIndex);
+    size_t oldest = (sampleIndex - sampleCount + WINDOW_SAMPLES) % WINDOW_SAMPLES;
+    for (size_t i = 0; i < sampleCount; i++) {
+        size_t idx = (oldest + i) % WINDOW_SAMPLES;
+        Serial.print("Buffer["); Serial.print(idx); Serial.print("] = ");
+        Serial.println(sampleBuffer[idx], 2);
+    }
+    Serial.print("Computed rolling average: "); Serial.println(rollingAverage(), 2);
+    Serial.println("");
+}
+
 void setup() {
     Serial.begin(115200);
     delay(500);
@@ -134,5 +147,7 @@ void loop() {
     while (millis() - lastSample >= SAMPLE_INTERVAL_MS) {
         lastSample += SAMPLE_INTERVAL_MS;
         sampleAndDisplay();
+        debugBuffer();
     }
 }
+
