@@ -4,6 +4,7 @@
 #include <Adafruit_VEML7700.h>
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
+#include <Fonts/FreeMonoBold24pt7b.h>
 #include <math.h>
 
 #define EPD_BUSY 17
@@ -21,12 +22,10 @@ GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> display(GxEPD2_154_D67(EPD_CS,
 const size_t WINDOW_SAMPLES = 60;
 const unsigned long MINUTE_INTERVAL_MS = 60000UL;
 const unsigned long SUBSAMPLE_INTERVAL_MS = 5000UL;
-
 float sampleBuffer[WINDOW_SAMPLES];
 size_t sampleIndex = 0;
 size_t sampleCount = 0;
 float sampleSum = 0.0f;
-
 float subSampleSum = 0.0f;
 size_t subSampleCount = 0;
 unsigned long lastSubSample = 0;
@@ -54,23 +53,42 @@ void formatFloat(float value, char* out, size_t outSize, uint8_t decimals) {
 }
 
 void drawScreen(float lux, float oneHourAverage) {
-    char luxText[24];
-    char avgText[24];
-    dtostrf(lux, 0, 1, luxText);
-    formatFloat(oneHourAverage, avgText, sizeof(avgText), 1);
+    int luxInt = (int)roundf(lux);
+    int avgInt = (int)roundf(oneHourAverage);
+    char luxText[16];
+    char avgText[16];
+    snprintf(luxText, sizeof(luxText), "%d", luxInt);
+    snprintf(avgText, sizeof(avgText), "%d", avgInt);
+    int16_t tbx, tby;
+    uint16_t tbw, tbh;
     display.setFullWindow();
     display.firstPage();
     do {
         display.fillScreen(GxEPD_WHITE);
         display.setTextColor(GxEPD_BLACK);
+        int screenW = display.width();
+        int halfW = screenW / 2;
         display.setFont(&FreeMonoBold12pt7b);
-        display.setCursor(0, 26);
-        display.print("Lux");
-        display.setCursor(0, 54);
+        const char* label1 = "Lux";
+        display.getTextBounds(label1, 0, 0, &tbx, &tby, &tbw, &tbh);
+        int x1 = (halfW - tbw) / 2;
+        int yLabel = 28;
+        display.setCursor(x1, yLabel);
+        display.print(label1);
+        const char* label2 = "Std.";
+        display.getTextBounds(label2, 0, 0, &tbx, &tby, &tbw, &tbh);
+        int x2 = halfW + (halfW - tbw) / 2;
+        display.setCursor(x2, yLabel);
+        display.print(label2);
+        display.setFont(&FreeMonoBold24pt7b);
+        int yValue = 120;
+        display.getTextBounds(luxText, 0, 0, &tbx, &tby, &tbw, &tbh);
+        x1 = (halfW - tbw) / 2;
+        display.setCursor(x1, yValue);
         display.print(luxText);
-        display.setCursor(0, 82);
-        display.print("1h avg");
-        display.setCursor(0, 110);
+        display.getTextBounds(avgText, 0, 0, &tbx, &tby, &tbw, &tbh);
+        x2 = halfW + (halfW - tbw) / 2;
+        display.setCursor(x2, yValue);
         display.print(avgText);
     } while (display.nextPage());
 }
@@ -129,15 +147,20 @@ void finalizeMinute() {
 }
 
 void debugBuffer() {
-    Serial.print("Sample count: "); Serial.println(sampleCount);
-    Serial.print("Next write index: "); Serial.println(sampleIndex);
+    Serial.print("Sample count: ");
+    Serial.println(sampleCount);
+    Serial.print("Next write index: ");
+    Serial.println(sampleIndex);
     size_t oldest = (sampleIndex - sampleCount + WINDOW_SAMPLES) % WINDOW_SAMPLES;
     for (size_t i = 0; i < sampleCount; i++) {
         size_t idx = (oldest + i) % WINDOW_SAMPLES;
-        Serial.print("Buffer["); Serial.print(idx); Serial.print("] = ");
+        Serial.print("Buffer[");
+        Serial.print(idx);
+        Serial.print("] = ");
         Serial.println(sampleBuffer[idx], 2);
     }
-    Serial.print("Computed rolling average: "); Serial.println(rollingAverage(), 2);
+    Serial.print("Computed rolling average: ");
+    Serial.println(rollingAverage(), 2);
 }
 
 void setup() {
