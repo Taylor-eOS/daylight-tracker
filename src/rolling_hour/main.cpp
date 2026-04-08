@@ -125,8 +125,8 @@ void collectSubSample() {
     if (lux > 10000.0f) lux = 10000.0f;
     subSampleSum += (uint32_t)roundf(lux);
     subSampleCount++;
-    SAFE_SERIAL.print("lux: ");
-    SAFE_SERIAL.println(lux, 1);
+    Serial.print("lux: ");
+    Serial.println(lux, 1);
 }
 
 void drawSleep() {
@@ -148,16 +148,16 @@ void finalizeMinute() {
     subSampleCount = 0;
     addSample(minuteScore);
     uint8_t avg = rollingAverage();
-    SAFE_SERIAL.print("Minute avg lux: ");
-    SAFE_SERIAL.print(avgLux);
-    SAFE_SERIAL.print("  score: ");
-    SAFE_SERIAL.print(minuteScore);
-    SAFE_SERIAL.print("  1h avg: ");
-    SAFE_SERIAL.println(avg);
+    Serial.print("Minute avg lux: ");
+    Serial.print(avgLux);
+    Serial.print("  score: ");
+    Serial.print(minuteScore);
+    Serial.print("  1h avg: ");
+    Serial.println(avg);
     drawScreen(avgLux, avg);
     if (sampleCount == WINDOW_SAMPLES) {
         if (avg < NIGHT_THRESHOLD && !hasSleptThisNight) {
-            SAFE_SERIAL.println("Entering sleep mode");
+            Serial.println("Entering sleep mode");
             hasSleptThisNight = true;
             drawSleep();
             delay(1000);
@@ -171,20 +171,21 @@ void finalizeMinute() {
 }
 
 void debugBuffer() {
-    SAFE_SERIAL.print("Sample count: ");
-    SAFE_SERIAL.println(sampleCount);
-    SAFE_SERIAL.print("Next write index: ");
-    SAFE_SERIAL.println(sampleIndex);
+    Serial.flush();
+    Serial.print("Sample count: ");
+    Serial.println(sampleCount);
+    Serial.print("Next write index: ");
+    Serial.println(sampleIndex);
     size_t oldest = (sampleIndex - sampleCount + WINDOW_SAMPLES) % WINDOW_SAMPLES;
     for (size_t i = 0; i < sampleCount; i++) {
         size_t idx = (oldest + i) % WINDOW_SAMPLES;
-        SAFE_SERIAL.print("Buffer[");
-        SAFE_SERIAL.print(idx);
-        SAFE_SERIAL.print("] = ");
-        SAFE_SERIAL.println(sampleBuffer[idx]);
+        Serial.print("Buffer[");
+        Serial.print(idx);
+        Serial.print("] = ");
+        Serial.println(sampleBuffer[idx]);
     }
-    SAFE_SERIAL.print("Computed rolling average: ");
-    SAFE_SERIAL.println(rollingAverage());
+    Serial.print("Computed rolling average: ");
+    Serial.println(rollingAverage());
 }
 
 void setup() {
@@ -195,7 +196,7 @@ void setup() {
     display.init(115200);
     display.setRotation(0);
     if (!veml.begin(&Wire)) {
-        SAFE_SERIAL.println("VEML7700 sensor not found");
+        Serial.println("VEML7700 sensor not found");
         drawError("Sensor", "not found");
         while (true) {
             delay(1000);
