@@ -59,7 +59,11 @@ void drawScreen(float lux, float oneHourAverage) {
     int avgInt = (int)roundf(oneHourAverage);
     char luxText[16];
     char avgText[16];
-    snprintf(luxText, sizeof(luxText), "%d", luxInt);
+    if (luxInt > 9999) {
+        snprintf(luxText, sizeof(luxText), "max");
+    } else {
+        snprintf(luxText, sizeof(luxText), "%d", luxInt);
+    }
     snprintf(avgText, sizeof(avgText), "%d", avgInt);
     int16_t tbx, tby;
     uint16_t tbw, tbh;
