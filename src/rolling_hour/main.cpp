@@ -5,7 +5,9 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeMonoBold24pt7b.h>
+#include <Fonts/FreeMonoBold18pt7b.h>
 #include <math.h>
+#include "SafeSerial.h"
 
 #define EPD_BUSY 17
 #define EPD_RST 16
@@ -80,15 +82,17 @@ void drawScreen(float lux, float oneHourAverage) {
         int x2 = halfW + (halfW - tbw) / 2;
         display.setCursor(x2, yLabel);
         display.print(label2);
-        display.setFont(&FreeMonoBold24pt7b);
-        int yValue = 120;
+        display.setFont(&FreeMonoBold18pt7b);
+        int yLux = 90;
+        int yAvg = 120;
         display.getTextBounds(luxText, 0, 0, &tbx, &tby, &tbw, &tbh);
         x1 = (halfW - tbw) / 2;
-        display.setCursor(x1, yValue);
+        display.setCursor(x1, yLux);
         display.print(luxText);
+        display.setFont(&FreeMonoBold24pt7b);
         display.getTextBounds(avgText, 0, 0, &tbx, &tby, &tbw, &tbh);
         x2 = halfW + (halfW - tbw) / 2;
-        display.setCursor(x2, yValue);
+        display.setCursor(x2, yAvg);
         display.print(avgText);
     } while (display.nextPage());
 }
@@ -125,8 +129,8 @@ void collectSubSample() {
     float lux = veml.readLux();
     subSampleSum += lux;
     subSampleCount++;
-    Serial.print("Sub-sample lux: ");
-    Serial.println(lux, 1);
+    SAFE_SERIAL.print("Sub-sample lux: ");
+    SAFE_SERIAL.println(lux, 1);
 }
 
 void finalizeMinute() {
@@ -136,42 +140,42 @@ void finalizeMinute() {
     subSampleCount = 0;
     addSample(minuteScore);
     float avg = rollingAverage();
-    Serial.print("Minute avg lux: ");
-    Serial.print(avgLux, 1);
-    Serial.print("  score: ");
-    Serial.print(minuteScore, 1);
-    Serial.print("  1h avg: ");
-    Serial.println(avg, 1);
+    SAFE_SERIAL.print("Minute avg lux: ");
+    SAFE_SERIAL.print(avgLux, 1);
+    SAFE_SERIAL.print("  score: ");
+    SAFE_SERIAL.print(minuteScore, 1);
+    SAFE_SERIAL.print("  1h avg: ");
+    SAFE_SERIAL.println(avg, 1);
     float lux = veml.readLux();
     drawScreen(lux, avg);
 }
 
 void debugBuffer() {
-    Serial.print("Sample count: ");
-    Serial.println(sampleCount);
-    Serial.print("Next write index: ");
-    Serial.println(sampleIndex);
+    SAFE_SERIAL.print("Sample count: ");
+    SAFE_SERIAL.println(sampleCount);
+    SAFE_SERIAL.print("Next write index: ");
+    SAFE_SERIAL.println(sampleIndex);
     size_t oldest = (sampleIndex - sampleCount + WINDOW_SAMPLES) % WINDOW_SAMPLES;
     for (size_t i = 0; i < sampleCount; i++) {
         size_t idx = (oldest + i) % WINDOW_SAMPLES;
-        Serial.print("Buffer[");
-        Serial.print(idx);
-        Serial.print("] = ");
-        Serial.println(sampleBuffer[idx], 2);
+        SAFE_SERIAL.print("Buffer[");
+        SAFE_SERIAL.print(idx);
+        SAFE_SERIAL.print("] = ");
+        SAFE_SERIAL.println(sampleBuffer[idx], 2);
     }
-    Serial.print("Computed rolling average: ");
-    Serial.println(rollingAverage(), 2);
+    SAFE_SERIAL.print("Computed rolling average: ");
+    SAFE_SERIAL.println(rollingAverage(), 2);
 }
 
 void setup() {
-    Serial.begin(115200);
+    SAFE_SERIAL.begin(115200);
     delay(500);
     Wire.begin(VEML_SDA, VEML_SCL);
     SPI.begin(EPD_SCK, -1, EPD_MOSI, EPD_CS);
     display.init(115200);
     display.setRotation(0);
     if (!veml.begin(&Wire)) {
-        Serial.println("VEML7700 sensor not found");
+        SAFE_SERIAL.println("VEML7700 sensor not found");
         drawError("Sensor", "not found");
         while (true) {
             delay(1000);
