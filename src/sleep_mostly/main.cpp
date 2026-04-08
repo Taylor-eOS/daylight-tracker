@@ -20,21 +20,20 @@
 Adafruit_VEML7700 veml;
 GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> display(GxEPD2_154_D67(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
-const size_t WINDOW_SAMPLES = 60;
-const unsigned long MINUTE_INTERVAL_MS = 1000UL * WINDOW_SAMPLES;
 const unsigned long SUBSAMPLE_INTERVAL_MS = 5000UL;
-uint8_t sampleBuffer[WINDOW_SAMPLES];
-size_t sampleIndex = 0;
-size_t sampleCount = 0;
-uint32_t subSampleSum = 0;
-size_t subSampleCount = 0;
-unsigned long lastSubSample = 0;
-unsigned long lastMinute = 0;
+const unsigned long MEASURE_DURATION_MS = 60ULL * SUBSAMPLE_INTERVAL_MS;
+const uint64_t SLEEP_DURATION_US = 4ULL * 60ULL * 1000000ULL;
+const size_t WINDOW_SAMPLES = MEASURE_DURATION_MS / SUBSAMPLE_INTERVAL_MS;
 const uint8_t NIGHT_THRESHOLD = 10;
-const uint64_t SLEEP_DURATION_US = 6ULL * 60ULL * 60ULL * 1000000ULL;
-RTC_DATA_ATTR bool hasSleptThisNight = false;
 const float minLux = 50.0f;
 const float maxLux = 10000.0f;
+RTC_DATA_ATTR uint8_t sampleBuffer[WINDOW_SAMPLES];
+RTC_DATA_ATTR size_t sampleIndex = 0;
+RTC_DATA_ATTR size_t sampleCount = 0;
+RTC_DATA_ATTR bool hasSleptThisNight = false;
+
+uint32_t subSampleSum = 0;
+size_t subSampleCount = 0;
 
 uint8_t luxToDaylightScore(float lux) {
     if (lux <= minLux) return 0;
@@ -204,20 +203,21 @@ void setup() {
     }
     veml.setIntegrationTime(VEML7700_IT_800MS);
     veml.setGain(VEML7700_GAIN_1_4);
+    unsigned long measureStart = millis();
+    unsigned long lastSubSample = measureStart;
     collectSubSample();
-    lastSubSample = millis();
-    lastMinute = millis();
+    while (millis() - measureStart < MEASURE_DURATION_MS) {
+        unsigned long now = millis();
+        if (now - lastSubSample >= SUBSAMPLE_INTERVAL_MS) {
+            lastSubSample += SUBSAMPLE_INTERVAL_MS;
+            collectSubSample();
+        }
+    }
+    finalizeMinute();
+    debugBuffer();
+    esp_sleep_enable_timer_wakeup(SLEEP_DURATION_US);
+    esp_deep_sleep_start();
 }
 
-void loop() {
-    unsigned long now = millis();
-    if (now - lastSubSample >= SUBSAMPLE_INTERVAL_MS) {
-        lastSubSample += SUBSAMPLE_INTERVAL_MS;
-        collectSubSample();
-    }
-    if (now - lastMinute >= MINUTE_INTERVAL_MS) {
-        lastMinute += MINUTE_INTERVAL_MS;
-        finalizeMinute();
-        debugBuffer();
-    }
-}
+void loop() {}
+
