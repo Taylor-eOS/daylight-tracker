@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#define DISABLE_DIAGNOSTIC_OUTPUT
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_VEML7700.h>
@@ -32,6 +33,9 @@ float subSampleSum = 0.0f;
 size_t subSampleCount = 0;
 unsigned long lastSubSample = 0;
 unsigned long lastMinute = 0;
+const float NIGHT_THRESHOLD = 10.0f;
+const uint64_t SLEEP_DURATION_US = 6ULL * 60ULL * 60ULL * 1000000ULL;
+RTC_DATA_ATTR bool hasSleptThisNight = false;
 
 float luxToDaylightScore(float lux) {
     const float maxLux = 10000.0f;
@@ -81,7 +85,7 @@ void drawScreen(float lux, float oneHourAverage) {
         int yLabel = 28;
         display.setCursor(x1, yLabel);
         display.print(label1);
-        const char* label2 = "Std";
+        const char* label2 = "%";
         display.getTextBounds(label2, 0, 0, &tbx, &tby, &tbw, &tbh);
         int x2 = halfW + (halfW - tbw) / 2;
         display.setCursor(x2, yLabel);
@@ -96,7 +100,7 @@ void drawScreen(float lux, float oneHourAverage) {
         display.setFont(&FreeMonoBold24pt7b);
         display.getTextBounds(avgText, 0, 0, &tbx, &tby, &tbw, &tbh);
         x2 = halfW + (halfW - tbw) / 2;
-        display.setCursor(x2, yAvg);
+        display.setCursor(x2 - 2, yAvg);
         display.print(avgText);
     } while (display.nextPage());
 }
@@ -137,6 +141,18 @@ void collectSubSample() {
     SAFE_SERIAL.println(lux, 1);
 }
 
+void drawSleep() {
+    display.setFullWindow();
+    display.firstPage();
+    do {
+        display.fillScreen(GxEPD_WHITE);
+        display.setTextColor(GxEPD_BLACK);
+        display.setFont(&FreeMonoBold18pt7b);
+        display.setCursor(10, 80);
+        display.print("sleep");
+    } while (display.nextPage());
+}
+
 void finalizeMinute() {
     float avgLux = (subSampleCount > 0) ? (subSampleSum / (float)subSampleCount) : 0.0f;
     float minuteScore = luxToDaylightScore(avgLux);
@@ -151,6 +167,20 @@ void finalizeMinute() {
     SAFE_SERIAL.print("  1h avg: ");
     SAFE_SERIAL.println(avg, 1);
     drawScreen(avgLux, avg);
+    if (sampleCount == WINDOW_SAMPLES) {
+        if (avg < NIGHT_THRESHOLD && !hasSleptThisNight) {
+            SAFE_SERIAL.println("Entering sleep mode");
+            hasSleptThisNight = true;
+            drawSleep();
+            delay(1000);
+            esp_sleep_enable_timer_wakeup(SLEEP_DURATION_US);
+            esp_deep_sleep_start();
+        }
+
+        if (avg > (NIGHT_THRESHOLD + 10.0f)) {
+            hasSleptThisNight = false;
+        }
+    }
 }
 
 void debugBuffer() {
@@ -171,7 +201,7 @@ void debugBuffer() {
 }
 
 void setup() {
-    SAFE_SERIAL.begin(115200);
+    Serial.begin(115200);
     delay(500);
     Wire.begin(VEML_SDA, VEML_SCL);
     SPI.begin(EPD_SCK, -1, EPD_MOSI, EPD_CS);
