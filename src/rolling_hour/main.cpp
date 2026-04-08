@@ -4,8 +4,8 @@
 #include <Adafruit_VEML7700.h>
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
-#include <Fonts/FreeMonoBold24pt7b.h>
 #include <Fonts/FreeMonoBold18pt7b.h>
+#include <Fonts/FreeMonoBold24pt7b.h>
 #include <math.h>
 #include "SafeSerial.h"
 
@@ -24,53 +24,45 @@ GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> display(GxEPD2_154_D67(EPD_CS,
 const size_t WINDOW_SAMPLES = 60;
 const unsigned long MINUTE_INTERVAL_MS = 60000UL;
 const unsigned long SUBSAMPLE_INTERVAL_MS = 5000UL;
-float sampleBuffer[WINDOW_SAMPLES];
+uint8_t sampleBuffer[WINDOW_SAMPLES];
 size_t sampleIndex = 0;
 size_t sampleCount = 0;
-float subSampleSum = 0.0f;
+uint32_t subSampleSum = 0;
 size_t subSampleCount = 0;
 unsigned long lastSubSample = 0;
 unsigned long lastMinute = 0;
-const float NIGHT_THRESHOLD = 10.0f;
+const uint8_t NIGHT_THRESHOLD = 10;
 const uint64_t SLEEP_DURATION_US = 6ULL * 60ULL * 60ULL * 1000000ULL;
 RTC_DATA_ATTR bool hasSleptThisNight = false;
 
-float luxToDaylightScore(float lux) {
+uint8_t luxToDaylightScore(float lux) {
     const float maxLux = 10000.0f;
-    if (lux <= 0.0f) return 0.0f;
+    if (lux <= 0.0f) return 0;
     if (lux > maxLux) lux = maxLux;
     float normalized = log10f(lux + 1.0f) / log10f(maxLux + 1.0f);
     if (normalized < 0.0f) normalized = 0.0f;
     if (normalized > 1.0f) normalized = 1.0f;
-    return normalized * 100.0f;
+    return (uint8_t)(normalized * 100.0f);
 }
 
-float rollingAverage() {
-    if (sampleCount == 0) return 0.0f;
-    float sum = 0.0f;
+uint8_t rollingAverage() {
+    if (sampleCount == 0) return 0;
+    uint32_t sum = 0;
     for (size_t i = 0; i < sampleCount; i++) {
         sum += sampleBuffer[i];
     }
-    return sum / (float)sampleCount;
+    return (uint8_t)(sum / sampleCount);
 }
 
-void formatFloat(float value, char* out, size_t outSize, uint8_t decimals) {
-    char fmt[8];
-    snprintf(fmt, sizeof(fmt), "%%.%uf", decimals);
-    snprintf(out, outSize, fmt, value);
-}
-
-void drawScreen(float lux, float oneHourAverage) {
-    int luxInt = (int)roundf(lux);
-    int avgInt = (int)roundf(oneHourAverage);
+void drawScreen(uint32_t lux, uint8_t oneHourAverage) {
     char luxText[16];
     char avgText[16];
-    if (luxInt > 9999) {
+    if (lux > 9999) {
         snprintf(luxText, sizeof(luxText), "max");
     } else {
-        snprintf(luxText, sizeof(luxText), "%d", luxInt);
+        snprintf(luxText, sizeof(luxText), "%lu", lux);
     }
-    snprintf(avgText, sizeof(avgText), "%d", avgInt);
+    snprintf(avgText, sizeof(avgText), "%u", oneHourAverage);
     int16_t tbx, tby;
     uint16_t tbw, tbh;
     display.setFullWindow();
@@ -121,20 +113,17 @@ void drawError(const char* line1, const char* line2) {
     } while (display.nextPage());
 }
 
-void addSample(float score) {
-    if (sampleCount < WINDOW_SAMPLES) {
-        sampleBuffer[sampleIndex] = score;
-        sampleIndex = (sampleIndex + 1) % WINDOW_SAMPLES;
-        sampleCount++;
-        return;
-    }
+void addSample(uint8_t score) {
     sampleBuffer[sampleIndex] = score;
     sampleIndex = (sampleIndex + 1) % WINDOW_SAMPLES;
+    if (sampleCount < WINDOW_SAMPLES) sampleCount++;
 }
 
 void collectSubSample() {
     float lux = veml.readLux();
-    subSampleSum += lux;
+    if (lux < 0.0f) lux = 0.0f;
+    if (lux > 10000.0f) lux = 10000.0f;
+    subSampleSum += (uint32_t)roundf(lux);
     subSampleCount++;
     SAFE_SERIAL.print("lux: ");
     SAFE_SERIAL.println(lux, 1);
@@ -153,18 +142,18 @@ void drawSleep() {
 }
 
 void finalizeMinute() {
-    float avgLux = (subSampleCount > 0) ? (subSampleSum / (float)subSampleCount) : 0.0f;
-    float minuteScore = luxToDaylightScore(avgLux);
-    subSampleSum = 0.0f;
+    uint32_t avgLux = (subSampleCount > 0) ? (subSampleSum / subSampleCount) : 0;
+    uint8_t minuteScore = luxToDaylightScore((float)avgLux);
+    subSampleSum = 0;
     subSampleCount = 0;
     addSample(minuteScore);
-    float avg = rollingAverage();
-    SAFE_SERIAL.print("Minute avg: ");
-    SAFE_SERIAL.print(avgLux, 1);
+    uint8_t avg = rollingAverage();
+    SAFE_SERIAL.print("Minute avg lux: ");
+    SAFE_SERIAL.print(avgLux);
     SAFE_SERIAL.print("  score: ");
-    SAFE_SERIAL.print(minuteScore, 1);
+    SAFE_SERIAL.print(minuteScore);
     SAFE_SERIAL.print("  1h avg: ");
-    SAFE_SERIAL.println(avg, 1);
+    SAFE_SERIAL.println(avg);
     drawScreen(avgLux, avg);
     if (sampleCount == WINDOW_SAMPLES) {
         if (avg < NIGHT_THRESHOLD && !hasSleptThisNight) {
@@ -175,8 +164,7 @@ void finalizeMinute() {
             esp_sleep_enable_timer_wakeup(SLEEP_DURATION_US);
             esp_deep_sleep_start();
         }
-
-        if (avg > (NIGHT_THRESHOLD + 10.0f)) {
+        if (avg > (NIGHT_THRESHOLD + 10)) {
             hasSleptThisNight = false;
         }
     }
@@ -193,10 +181,10 @@ void debugBuffer() {
         SAFE_SERIAL.print("Buffer[");
         SAFE_SERIAL.print(idx);
         SAFE_SERIAL.print("] = ");
-        SAFE_SERIAL.println(sampleBuffer[idx], 2);
+        SAFE_SERIAL.println(sampleBuffer[idx]);
     }
     SAFE_SERIAL.print("Computed rolling average: ");
-    SAFE_SERIAL.println(rollingAverage(), 2);
+    SAFE_SERIAL.println(rollingAverage());
 }
 
 void setup() {
