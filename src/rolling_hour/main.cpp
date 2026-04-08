@@ -1,13 +1,12 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
+#include <math.h>
 #include <Adafruit_VEML7700.h>
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <Fonts/FreeMonoBold18pt7b.h>
 #include <Fonts/FreeMonoBold24pt7b.h>
-#include <math.h>
-#include "SafeSerial.h"
 
 #define EPD_BUSY 17
 #define EPD_RST 16
@@ -34,12 +33,13 @@ unsigned long lastMinute = 0;
 const uint8_t NIGHT_THRESHOLD = 10;
 const uint64_t SLEEP_DURATION_US = 6ULL * 60ULL * 60ULL * 1000000ULL;
 RTC_DATA_ATTR bool hasSleptThisNight = false;
+const float minLux = 100.0f;
+const float maxLux = 10000.0f;
 
 uint8_t luxToDaylightScore(float lux) {
-    const float maxLux = 10000.0f;
-    if (lux <= 0.0f) return 0;
+    if (lux <= minLux) return 0;
     if (lux > maxLux) lux = maxLux;
-    float normalized = log10f(lux + 1.0f) / log10f(maxLux + 1.0f);
+    float normalized = log10f(lux - minLux + 1.0f) / log10f(maxLux - minLux + 1.0f);
     if (normalized < 0.0f) normalized = 0.0f;
     if (normalized > 1.0f) normalized = 1.0f;
     return (uint8_t)(normalized * 100.0f);
@@ -122,7 +122,7 @@ void addSample(uint8_t score) {
 void collectSubSample() {
     float lux = veml.readLux();
     if (lux < 0.0f) lux = 0.0f;
-    if (lux > 10000.0f) lux = 10000.0f;
+    if (lux > maxLux) lux = maxLux;
     subSampleSum += (uint32_t)roundf(lux);
     subSampleCount++;
     Serial.print("lux: ");
