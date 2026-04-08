@@ -77,7 +77,7 @@ void drawScreen(float lux, float oneHourAverage) {
         int yLabel = 28;
         display.setCursor(x1, yLabel);
         display.print(label1);
-        const char* label2 = "Std.";
+        const char* label2 = "Std";
         display.getTextBounds(label2, 0, 0, &tbx, &tby, &tbw, &tbh);
         int x2 = halfW + (halfW - tbw) / 2;
         display.setCursor(x2, yLabel);
@@ -146,8 +146,7 @@ void finalizeMinute() {
     SAFE_SERIAL.print(minuteScore, 1);
     SAFE_SERIAL.print("  1h avg: ");
     SAFE_SERIAL.println(avg, 1);
-    float lux = veml.readLux();
-    drawScreen(lux, avg);
+    drawScreen(avgLux, avg);
 }
 
 void debugBuffer() {
