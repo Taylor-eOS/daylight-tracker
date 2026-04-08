@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#define DISABLE_DIAGNOSTIC_OUTPUT
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_VEML7700.h>
@@ -28,7 +27,6 @@ const unsigned long SUBSAMPLE_INTERVAL_MS = 5000UL;
 float sampleBuffer[WINDOW_SAMPLES];
 size_t sampleIndex = 0;
 size_t sampleCount = 0;
-float sampleSum = 0.0f;
 float subSampleSum = 0.0f;
 size_t subSampleCount = 0;
 unsigned long lastSubSample = 0;
@@ -49,7 +47,11 @@ float luxToDaylightScore(float lux) {
 
 float rollingAverage() {
     if (sampleCount == 0) return 0.0f;
-    return sampleSum / (float)sampleCount;
+    float sum = 0.0f;
+    for (size_t i = 0; i < sampleCount; i++) {
+        sum += sampleBuffer[i];
+    }
+    return sum / (float)sampleCount;
 }
 
 void formatFloat(float value, char* out, size_t outSize, uint8_t decimals) {
@@ -122,14 +124,11 @@ void drawError(const char* line1, const char* line2) {
 void addSample(float score) {
     if (sampleCount < WINDOW_SAMPLES) {
         sampleBuffer[sampleIndex] = score;
-        sampleSum += score;
         sampleIndex = (sampleIndex + 1) % WINDOW_SAMPLES;
         sampleCount++;
         return;
     }
-    sampleSum -= sampleBuffer[sampleIndex];
     sampleBuffer[sampleIndex] = score;
-    sampleSum += score;
     sampleIndex = (sampleIndex + 1) % WINDOW_SAMPLES;
 }
 
@@ -137,7 +136,7 @@ void collectSubSample() {
     float lux = veml.readLux();
     subSampleSum += lux;
     subSampleCount++;
-    SAFE_SERIAL.print("Sub-sample lux: ");
+    SAFE_SERIAL.print("lux: ");
     SAFE_SERIAL.println(lux, 1);
 }
 
@@ -160,7 +159,7 @@ void finalizeMinute() {
     subSampleCount = 0;
     addSample(minuteScore);
     float avg = rollingAverage();
-    SAFE_SERIAL.print("Minute avg lux: ");
+    SAFE_SERIAL.print("Minute avg: ");
     SAFE_SERIAL.print(avgLux, 1);
     SAFE_SERIAL.print("  score: ");
     SAFE_SERIAL.print(minuteScore, 1);
