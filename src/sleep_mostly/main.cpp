@@ -37,7 +37,9 @@ size_t subSampleCount = 0;
 uint8_t luxToDaylightScore(float lux) {
     if (lux <= minLux) return 0;
     if (lux > maxLux) lux = maxLux;
-    float normalized = log10f(lux - minLux + 1.0f) / log10f(maxLux - minLux + 1.0f);
+    float midpoint = 2500.0f;
+    float steepness = 0.002f;
+    float normalized = 1.0f / (1.0f + expf(-steepness * (lux - midpoint)));
     if (normalized < 0.0f) normalized = 0.0f;
     if (normalized > 1.0f) normalized = 1.0f;
     return (uint8_t)(normalized * 100.0f);
