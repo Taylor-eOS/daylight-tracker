@@ -20,10 +20,10 @@
 Adafruit_VEML7700 veml;
 GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> display(GxEPD2_154_D67(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
-const size_t WINDOW_SAMPLES = 12;
-const unsigned long SUBSAMPLE_INTERVAL_MS = 5000UL;
+const size_t WINDOW_SAMPLES = 15;
+const unsigned long SUBSAMPLE_INTERVAL_MS = 6000UL;
 const unsigned long MEASURE_DURATION_MS = 60000UL;
-const uint64_t SLEEP_DURATION_US = 4ULL * 60ULL * 1000000ULL;
+const uint64_t SLEEP_DURATION_US = 3ULL * 60ULL * 1000000ULL;
 const uint8_t NIGHT_THRESHOLD = 5;
 const float minLux = 50.0f;
 const float maxLux = 10000.0f;
@@ -200,8 +200,11 @@ void setup() {
             delay(1000);
         }
     }
-    veml.setIntegrationTime(VEML7700_IT_800MS);
-    veml.setGain(VEML7700_GAIN_1_4);
+    veml.setIntegrationTime(VEML7700_IT_100MS);
+    veml.setGain(VEML7700_GAIN_1_8);
+    delay(150);
+    veml.readLux();
+    delay(150);
     unsigned long measureStart = millis();
     unsigned long lastSubSample = measureStart;
     collectSubSample();
