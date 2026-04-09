@@ -42,7 +42,10 @@ uint8_t luxToDaylightScore(float lux) {
     compressed = compressed / maxCompressed;
     float midpoint = 0.78f;
     float steepness = 8.0f;
-    float normalized = 1.0f / (1.0f + expf(-steepness * (compressed - midpoint)));
+    float sigmoid = 1.0f / (1.0f + expf(-steepness * (compressed - midpoint)));
+    float low = 1.0f / (1.0f + expf(-steepness * (0.0f - midpoint)));
+    float high = 1.0f / (1.0f + expf(-steepness * (1.0f - midpoint)));
+    float normalized = (sigmoid - low) / (high - low);
     if (normalized < 0.0f) normalized = 0.0f;
     if (normalized > 1.0f) normalized = 1.0f;
     Serial.print("compressed: ");
